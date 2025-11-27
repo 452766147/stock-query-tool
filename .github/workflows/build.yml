@@ -26,11 +26,11 @@ jobs:
     
     - name: 打包图形界面版本
       run: |
-        pyinstaller --onefile --windowed --name "股票查询工具" --hidden-import akshare --hidden-import pandas 股票查询工具_图形界面版.py
+        pyinstaller --onefile --windowed --name "股票查询工具" --hidden-import akshare --hidden-import pandas --collect-all akshare --collect-data akshare 股票查询工具_图形界面版.py
     
     - name: 打包命令行版本
       run: |
-        pyinstaller --onefile --console --name "股票查询工具_命令行" --hidden-import akshare --hidden-import pandas 股票查询工具_命令行版.py
+        pyinstaller --onefile --console --name "股票查询工具_命令行" --hidden-import akshare --hidden-import pandas --collect-all akshare --collect-data akshare 股票查询工具_命令行版.py
     
     - name: 上传可执行文件
       uses: actions/upload-artifact@v4
