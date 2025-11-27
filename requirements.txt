@@ -1,0 +1,6 @@
+# requirements.txt
+# 股票查询工具所需的Python库
+
+akshare>=1.12.0
+pandas>=2.0.0
+pyinstaller>=6.0.0
