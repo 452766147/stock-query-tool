@@ -1,5 +1,5 @@
-; 股票查询工具 NSIS 安装脚本
-; 自动生成专业的Windows安装包
+; 股票查询工具 NSIS 安装脚本 - 修复版
+; 正确处理 PyInstaller --onedir 输出结构
 
 ;--------------------------------
 ; 包含现代UI
@@ -72,15 +72,22 @@ VIAddVersionKey /LANG=${LANG_SIMPCHINESE} "ProductVersion" "${PRODUCT_VERSION}"
 Section "主程序" SEC01
   SectionIn RO  ; 必选
   
-  ; 设置输出路径
+  ; 设置输出路径到安装目录
   SetOutPath "$INSTDIR"
   
-  ; 复制图形界面版本的所有文件
-  File /r "dist\股票查询工具\*.*"
+  ; 【关键修复】复制图形界面版本
+  ; PyInstaller --onedir 输出结构: dist/股票查询工具/
+  ;   ├─ 股票查询工具.exe
+  ;   └─ _internal/
   
-  ; 复制命令行版本
+  ; 方法1: 使用 /r 递归复制整个目录内容(不包括目录本身)
+  File "dist\股票查询工具\股票查询工具.exe"
+  File /r "dist\股票查询工具\_internal"
+  
+  ; 复制命令行版本到子目录
   SetOutPath "$INSTDIR\命令行版"
-  File /r "dist\股票查询工具_命令行\*.*"
+  File "dist\股票查询工具_命令行\股票查询工具_命令行.exe"
+  File /r "dist\股票查询工具_命令行\_internal"
   
   ; 写入安装路径到注册表
   WriteRegStr HKLM "Software\${PRODUCT_NAME}" "Install_Dir" "$INSTDIR"
@@ -96,6 +103,7 @@ Section "主程序" SEC01
   WriteRegDWORD HKLM "${PRODUCT_UNINST_KEY}" "NoRepair" 1
   
   ; 创建卸载程序
+  SetOutPath "$INSTDIR"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   
   ; 创建开始菜单快捷方式
