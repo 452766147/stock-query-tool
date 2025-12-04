@@ -75,10 +75,12 @@ Section "主程序" SEC01
   ; 设置输出路径
   SetOutPath "$INSTDIR"
   
-  ; 复制所有文件
-  File /r "dist\股票查询工具\_internal"
-  File "dist\股票查询工具\股票查询工具.exe"
-  File "dist\股票查询工具_命令行\股票查询工具_命令行.exe"
+  ; 复制图形界面版本的所有文件
+  File /r "dist\股票查询工具\*.*"
+  
+  ; 复制命令行版本
+  SetOutPath "$INSTDIR\命令行版"
+  File /r "dist\股票查询工具_命令行\*.*"
   
   ; 写入安装路径到注册表
   WriteRegStr HKLM "Software\${PRODUCT_NAME}" "Install_Dir" "$INSTDIR"
@@ -99,7 +101,7 @@ Section "主程序" SEC01
   ; 创建开始菜单快捷方式
   CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
   CreateShortcut "$SMPROGRAMS\${PRODUCT_NAME}\股票查询工具.lnk" "$INSTDIR\股票查询工具.exe"
-  CreateShortcut "$SMPROGRAMS\${PRODUCT_NAME}\股票查询工具_命令行.lnk" "$INSTDIR\股票查询工具_命令行.exe"
+  CreateShortcut "$SMPROGRAMS\${PRODUCT_NAME}\股票查询工具_命令行.lnk" "$INSTDIR\命令行版\股票查询工具_命令行.exe"
   CreateShortcut "$SMPROGRAMS\${PRODUCT_NAME}\卸载.lnk" "$INSTDIR\Uninstall.exe"
   
   ; 显示完成消息
@@ -129,8 +131,8 @@ Section "Uninstall"
   
   ; 删除程序文件
   RMDir /r "$INSTDIR\_internal"
+  RMDir /r "$INSTDIR\命令行版"
   Delete "$INSTDIR\股票查询工具.exe"
-  Delete "$INSTDIR\股票查询工具_命令行.exe"
   Delete "$INSTDIR\Uninstall.exe"
   
   ; 删除安装目录
