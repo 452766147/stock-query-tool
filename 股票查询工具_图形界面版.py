@@ -1,13 +1,14 @@
 """
-股票平均价格查询工具 - 图形界面版本
+股票平均价格查询工具 - 图形界面版本 v2.1
 适用于Windows系统,双击即可运行
+性能优化: 延迟导入akshare库,启动速度更快
 """
 
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 from tkcalendar import DateEntry
-import akshare as ak
-import pandas as pd
+# import akshare as ak  # 延迟导入,提升启动速度
+# import pandas as pd   # 延迟导入,提升启动速度
 from datetime import datetime, timedelta
 import threading
 import os
@@ -15,9 +16,12 @@ import os
 class StockQueryApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("股票平均价格查询工具 v1.0")
+        self.root.title("股票平均价格查询工具 v2.1")
         self.root.geometry("700x650")
         self.root.resizable(False, False)
+        
+        # 延迟导入标志
+        self.akshare_loaded = False
         
         # 设置窗口图标(如果有的话)
         try:
@@ -225,6 +229,16 @@ class StockQueryApp:
     def query_stock(self):
         """查询股票数据"""
         try:
+            # 首次查询时才导入akshare和pandas(延迟导入优化)
+            if not self.akshare_loaded:
+                self.update_status("正在加载数据模块...")
+                self.log_message("⏳ 首次使用,正在加载数据模块,请稍候...\n")
+                global ak, pd
+                import akshare as ak
+                import pandas as pd
+                self.akshare_loaded = True
+                self.log_message("✅ 数据模块加载完成!\n")
+            
             # 获取输入参数
             stock_code = self.code_entry.get().strip()
             if not stock_code:
