@@ -5,6 +5,7 @@
 
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
+from tkcalendar import DateEntry
 import akshare as ak
 import pandas as pd
 from datetime import datetime, timedelta
@@ -76,29 +77,61 @@ class StockQueryApp:
             fg="gray"
         ).pack(side=tk.LEFT)
         
-        # 查询月数
-        months_frame = tk.Frame(input_frame)
-        months_frame.pack(fill=tk.X, pady=5)
+        # 开始日期
+        start_date_frame = tk.Frame(input_frame)
+        start_date_frame.pack(fill=tk.X, pady=5)
         tk.Label(
-            months_frame,
-            text="查询月数:",
+            start_date_frame,
+            text="开始日期:",
             font=("微软雅黑", 10),
             width=10,
             anchor='w'
         ).pack(side=tk.LEFT)
-        self.months_spinbox = tk.Spinbox(
-            months_frame,
-            from_=1,
-            to=60,
+        # 默认为6个月前
+        default_start = datetime.now() - timedelta(days=180)
+        self.start_date_picker = DateEntry(
+            start_date_frame,
             font=("微软雅黑", 10),
-            width=18
+            width=18,
+            background='darkblue',
+            foreground='white',
+            borderwidth=2,
+            date_pattern='yyyy-mm-dd',
+            year=default_start.year,
+            month=default_start.month,
+            day=default_start.day
         )
-        self.months_spinbox.pack(side=tk.LEFT, padx=10)
-        self.months_spinbox.delete(0, tk.END)
-        self.months_spinbox.insert(0, "6")
+        self.start_date_picker.pack(side=tk.LEFT, padx=10)
         tk.Label(
-            months_frame,
-            text="(范围: 1-60个月)",
+            start_date_frame,
+            text="(选择查询起始日期)",
+            font=("微软雅黑", 9),
+            fg="gray"
+        ).pack(side=tk.LEFT)
+        
+        # 结束日期
+        end_date_frame = tk.Frame(input_frame)
+        end_date_frame.pack(fill=tk.X, pady=5)
+        tk.Label(
+            end_date_frame,
+            text="结束日期:",
+            font=("微软雅黑", 10),
+            width=10,
+            anchor='w'
+        ).pack(side=tk.LEFT)
+        self.end_date_picker = DateEntry(
+            end_date_frame,
+            font=("微软雅黑", 10),
+            width=18,
+            background='darkblue',
+            foreground='white',
+            borderwidth=2,
+            date_pattern='yyyy-mm-dd'
+        )
+        self.end_date_picker.pack(side=tk.LEFT, padx=10)
+        tk.Label(
+            end_date_frame,
+            text="(选择查询结束日期)",
             font=("微软雅黑", 9),
             fg="gray"
         ).pack(side=tk.LEFT)
@@ -199,18 +232,24 @@ class StockQueryApp:
                 self.query_button.config(state=tk.NORMAL)
                 return
             
-            try:
-                months = int(self.months_spinbox.get())
-                if months <= 0 or months > 60:
-                    raise ValueError
-            except ValueError:
-                messagebox.showwarning("输入错误", "月数必须在1-60之间!")
+            # 获取日期范围
+            start_date = self.start_date_picker.get_date()
+            end_date = self.end_date_picker.get_date()
+            
+            # 验证日期范围
+            if start_date >= end_date:
+                messagebox.showwarning("日期错误", "开始日期必须早于结束日期!")
                 self.query_button.config(state=tk.NORMAL)
                 return
             
-            # 计算时间范围
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=months * 30)
+            # 检查日期范围是否过大(最多5年)
+            date_diff = (end_date - start_date).days
+            if date_diff > 1825:  # 5年
+                messagebox.showwarning("日期范围过大", "查询范围不能超过5年!")
+                self.query_button.config(state=tk.NORMAL)
+                return
+            
+            # 转换为字符串格式
             start_date_str = start_date.strftime("%Y%m%d")
             end_date_str = end_date.strftime("%Y%m%d")
             
@@ -267,7 +306,7 @@ class StockQueryApp:
             self.log_message("=" * 60)
             
             # 保存CSV文件
-            filename = f"股票数据_{stock_code}_近{months}个月_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            filename = f"股票数据_{stock_code}_{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
             stock_df.to_csv(filename, index=False, encoding='utf-8-sig')
             
             file_path = os.path.abspath(filename)

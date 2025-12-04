@@ -21,20 +21,19 @@ def print_header():
     print("=" * 70)
     print()
 
-def get_stock_data(stock_code, months):
+def get_stock_data(stock_code, start_date_str, end_date_str):
     """
     获取股票数据并计算平均价格
     
     参数:
         stock_code: 股票代码 (如 "300919")
-        months: 月份数
+        start_date_str: 开始日期字符串 (如 "20250101")
+        end_date_str: 结束日期字符串 (如 "20251231")
     """
     try:
-        # 计算时间范围
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=months * 30)
-        start_date_str = start_date.strftime("%Y%m%d")
-        end_date_str = end_date.strftime("%Y%m%d")
+        # 转换日期用于显示
+        start_date = datetime.strptime(start_date_str, "%Y%m%d")
+        end_date = datetime.strptime(end_date_str, "%Y%m%d")
         
         print(f"\n⏳ 正在获取股票 {stock_code} 的数据...")
         print(f"   时间范围: {start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')}")
@@ -84,7 +83,7 @@ def get_stock_data(stock_code, months):
         print("=" * 70)
         
         # 保存CSV文件
-        filename = f"股票数据_{stock_code}_近{months}个月_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        filename = f"股票数据_{stock_code}_{start_date_str}-{end_date_str}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         stock_df.to_csv(filename, index=False, encoding='utf-8-sig')
         
         print(f"\n✅ 数据已保存至: {filename}")
@@ -120,24 +119,50 @@ def main():
             stock_code = "300919"
             print(f"   → 使用默认值: {stock_code} (中伟股份)")
         
-        # 输入时间区间
-        print("\n请输入查询月数 (直接回车使用默认值 6个月):")
-        months_input = input("月数: ").strip()
-        if not months_input:
-            months = 6
-            print(f"   → 使用默认值: {months} 个月")
+        # 输入开始日期
+        print("\n请输入开始日期 (格式: YYYYMMDD, 直接回车使用6个月前):")
+        start_input = input("开始日期: ").strip()
+        if not start_input:
+            start_date = datetime.now() - timedelta(days=180)
+            start_date_str = start_date.strftime("%Y%m%d")
+            print(f"   → 使用默认值: {start_date.strftime('%Y-%m-%d')}")
         else:
             try:
-                months = int(months_input)
-                if months <= 0 or months > 60:
-                    print("   ⚠️  月数范围应在 1-60 之间,使用默认值 6")
-                    months = 6
+                # 验证日期格式
+                start_date = datetime.strptime(start_input, "%Y%m%d")
+                start_date_str = start_input
             except ValueError:
-                print("   ⚠️  输入无效,使用默认值 6 个月")
-                months = 6
+                print("   ⚠️  日期格式错误,使用默认值(6个月前)")
+                start_date = datetime.now() - timedelta(days=180)
+                start_date_str = start_date.strftime("%Y%m%d")
+        
+        # 输入结束日期
+        print("\n请输入结束日期 (格式: YYYYMMDD, 直接回车使用今天):")
+        end_input = input("结束日期: ").strip()
+        if not end_input:
+            end_date = datetime.now()
+            end_date_str = end_date.strftime("%Y%m%d")
+            print(f"   → 使用默认值: {end_date.strftime('%Y-%m-%d')}")
+        else:
+            try:
+                # 验证日期格式
+                end_date = datetime.strptime(end_input, "%Y%m%d")
+                end_date_str = end_input
+            except ValueError:
+                print("   ⚠️  日期格式错误,使用默认值(今天)")
+                end_date = datetime.now()
+                end_date_str = end_date.strftime("%Y%m%d")
+        
+        # 验证日期范围
+        if datetime.strptime(start_date_str, "%Y%m%d") >= datetime.strptime(end_date_str, "%Y%m%d"):
+            print("\n   ⚠️  开始日期必须早于结束日期,使用默认值(最近6个月)")
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=180)
+            start_date_str = start_date.strftime("%Y%m%d")
+            end_date_str = end_date.strftime("%Y%m%d")
         
         # 获取数据
-        result = get_stock_data(stock_code, months)
+        result = get_stock_data(stock_code, start_date_str, end_date_str)
         
         # 询问是否继续
         print("\n" + "=" * 70)

@@ -3,4 +3,5 @@
 
 akshare>=1.12.0
 pandas>=2.0.0
+tkcalendar>=1.6.1
 pyinstaller>=6.0.0
