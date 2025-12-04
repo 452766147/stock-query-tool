@@ -28,37 +28,64 @@ jobs:
       shell: cmd
       run: |
         chcp 65001
-        pyinstaller --onedir --windowed --name "股票查询工具" --hidden-import akshare --hidden-import pandas --hidden-import threading --hidden-import tkinter --hidden-import tkcalendar --collect-all akshare --collect-data akshare --collect-all tkcalendar 股票查询工具_图形界面版.py
+        pyinstaller --onedir --windowed --name "StockQueryTool" --hidden-import akshare --hidden-import pandas --hidden-import threading --hidden-import tkinter --hidden-import tkcalendar --collect-all akshare --collect-data akshare --collect-all tkcalendar 股票查询工具_图形界面版.py
     
     - name: 打包命令行版本 (文件夹模式)
       shell: cmd
       run: |
         chcp 65001
-        pyinstaller --onedir --console --name "股票查询工具_命令行" --hidden-import akshare --hidden-import pandas --collect-all akshare --collect-data akshare 股票查询工具_命令行版.py
+        pyinstaller --onedir --console --name "StockQueryTool_CLI" --hidden-import akshare --hidden-import pandas --collect-all akshare --collect-data akshare 股票查询工具_命令行版.py
     
-    - name: 安装NSIS (制作安装包)
+    - name: 重命名为中文名称
+      shell: pwsh
       run: |
-        choco install nsis -y
+        Rename-Item "dist\StockQueryTool" "股票查询工具"
+        Rename-Item "dist\StockQueryTool_CLI" "股票查询工具_命令行"
+        Rename-Item "dist\股票查询工具\StockQueryTool.exe" "股票查询工具.exe"
+        Rename-Item "dist\股票查询工具_命令行\StockQueryTool_CLI.exe" "股票查询工具_命令行.exe"
     
-    - name: 创建安装包
-      shell: cmd
+    - name: 创建使用说明
+      shell: pwsh
       run: |
-        chcp 65001
-        "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+        @"
+        ====================================
+        股票查询工具 v2.1 使用说明
+        ====================================
+        
+        📦 安装方法：
+        1. 解压本ZIP文件到任意位置（推荐：C:\Program Files\股票查询工具）
+        2. 进入"股票查询工具"文件夹
+        3. 双击"股票查询工具.exe"即可运行
+        
+        💡 创建桌面快捷方式：
+        右键"股票查询工具.exe" → 发送到 → 桌面快捷方式
+        
+        ⚡ 启动速度：
+        首次启动：1-2秒（无需解压等待）
+        后续启动：1-2秒
+        
+        📁 文件说明：
+        - 股票查询工具.exe：图形界面版本（推荐使用）
+        - 股票查询工具_命令行.exe：命令行版本
+        - _internal文件夹：程序运行所需库文件（请勿删除）
+        
+        🔧 如需卸载：
+        直接删除整个"股票查询工具"文件夹即可
+        
+        📧 问题反馈：
+        https://github.com/452766147/stock-query-tool
+        
+        ====================================
+        "@ | Out-File -FilePath "dist\使用说明.txt" -Encoding UTF8
     
-    - name: 上传安装包
+    - name: 打包为ZIP
+      shell: pwsh
+      run: |
+        Compress-Archive -Path "dist\股票查询工具", "dist\股票查询工具_命令行", "dist\使用说明.txt" -DestinationPath "股票查询工具_v2.1_便携版.zip" -Force
+    
+    - name: 上传便携版ZIP
       uses: actions/upload-artifact@v4
       with:
-        name: 股票查询工具安装包
-        path: |
-          股票查询工具安装包_v2.1.exe
-        retention-days: 30
-    
-    - name: 上传便携版 (可选)
-      uses: actions/upload-artifact@v4
-      with:
-        name: 股票查询工具便携版
-        path: |
-          dist/股票查询工具/
-          dist/股票查询工具_命令行/
-        retention-days: 30
+        name: 股票查询工具_v2.1_便携版
+        path: 股票查询工具_v2.1_便携版.zip
+        retention-days: 90
