@@ -24,23 +24,41 @@ jobs:
         pip install -r requirements.txt
         pip install pyinstaller
     
-    - name: 打包图形界面版本
+    - name: 打包图形界面版本 (文件夹模式)
       shell: cmd
       run: |
         chcp 65001
-        pyinstaller --onefile --windowed --name "股票查询工具" --hidden-import akshare --hidden-import pandas --hidden-import threading --hidden-import tkinter --hidden-import tkcalendar --collect-all akshare --collect-data akshare --collect-all tkcalendar 股票查询工具_图形界面版.py
+        pyinstaller --onedir --windowed --name "股票查询工具" --hidden-import akshare --hidden-import pandas --hidden-import threading --hidden-import tkinter --hidden-import tkcalendar --collect-all akshare --collect-data akshare --collect-all tkcalendar 股票查询工具_图形界面版.py
     
-    - name: 打包命令行版本
+    - name: 打包命令行版本 (文件夹模式)
       shell: cmd
       run: |
         chcp 65001
-        pyinstaller --onefile --console --name "股票查询工具_命令行" --hidden-import akshare --hidden-import pandas --collect-all akshare --collect-data akshare 股票查询工具_命令行版.py
+        pyinstaller --onedir --console --name "股票查询工具_命令行" --hidden-import akshare --hidden-import pandas --collect-all akshare --collect-data akshare 股票查询工具_命令行版.py
     
-    - name: 上传可执行文件
+    - name: 安装NSIS (制作安装包)
+      run: |
+        choco install nsis -y
+    
+    - name: 创建安装包
+      shell: cmd
+      run: |
+        chcp 65001
+        "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+    
+    - name: 上传安装包
       uses: actions/upload-artifact@v4
       with:
-        name: Windows可执行文件
+        name: 股票查询工具安装包
         path: |
-          dist/股票查询工具.exe
-          dist/股票查询工具_命令行.exe
+          股票查询工具安装包_v2.1.exe
+        retention-days: 30
+    
+    - name: 上传便携版 (可选)
+      uses: actions/upload-artifact@v4
+      with:
+        name: 股票查询工具便携版
+        path: |
+          dist/股票查询工具/
+          dist/股票查询工具_命令行/
         retention-days: 30
