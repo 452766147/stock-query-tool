@@ -1,6 +1,7 @@
 """
-股票平均价格查询工具 - 命令行版本
+股票平均价格查询工具 - 命令行版本 v2.3
 适用于Windows/Mac/Linux系统
+v2.3: 添加多数据源支持(东方财富+腾讯),自动切换备用数据源
 """
 
 import akshare as ak
@@ -17,9 +18,72 @@ def print_header():
     """打印标题"""
     print("=" * 70)
     print(" " * 20 + "股票平均价格查询工具")
-    print(" " * 25 + "v1.0")
+    print(" " * 25 + "v2.3")
     print("=" * 70)
     print()
+
+def fetch_stock_data(stock_code, start_date_str, end_date_str):
+    """
+    获取股票数据 - 多数据源策略
+    优先使用东方财富，失败后自动切换到腾讯数据源
+    """
+    # 数据源1: 东方财富 (stock_zh_a_hist)
+    print("📡 尝试数据源1: 东方财富...")
+    try:
+        stock_df = ak.stock_zh_a_hist(
+            symbol=stock_code,
+            period="daily",
+            start_date=start_date_str,
+            end_date=end_date_str,
+            adjust="qfq"
+        )
+        if not stock_df.empty:
+            print("✅ 东方财富数据获取成功!")
+            return stock_df
+    except Exception as e:
+        print(f"⚠️ 东方财富接口异常: {str(e)[:80]}")
+    
+    # 数据源2: 腾讯 (stock_zh_a_daily)
+    print("📡 尝试数据源2: 腾讯...")
+    try:
+        # 腾讯接口需要带市场前缀的代码
+        if stock_code.startswith('6'):
+            symbol_tencent = f"sh{stock_code}"
+        elif stock_code.startswith('0') or stock_code.startswith('3'):
+            symbol_tencent = f"sz{stock_code}"
+        else:
+            symbol_tencent = f"sz{stock_code}"
+        
+        stock_df = ak.stock_zh_a_daily(symbol=symbol_tencent, adjust="qfq")
+        
+        if not stock_df.empty:
+            # 转换列名以匹配东方财富格式
+            stock_df = stock_df.rename(columns={
+                'date': '日期',
+                'open': '开盘',
+                'high': '最高',
+                'low': '最低',
+                'close': '收盘',
+                'volume': '成交量',
+                'amount': '成交额'
+            })
+            
+            # 转换日期格式并筛选日期范围
+            stock_df['日期'] = pd.to_datetime(stock_df['日期'])
+            start_dt = pd.to_datetime(start_date_str)
+            end_dt = pd.to_datetime(end_date_str)
+            stock_df = stock_df[(stock_df['日期'] >= start_dt) & (stock_df['日期'] <= end_dt)]
+            stock_df['日期'] = stock_df['日期'].dt.strftime('%Y-%m-%d')
+            stock_df = stock_df.reset_index(drop=True)
+            
+            print("✅ 腾讯数据获取成功!")
+            return stock_df
+    except Exception as e:
+        print(f"⚠️ 腾讯接口异常: {str(e)[:80]}")
+    
+    # 所有数据源都失败
+    print("❌ 所有数据源均不可用")
+    return pd.DataFrame()
 
 def get_stock_data(stock_code, start_date_str, end_date_str):
     """
@@ -39,14 +103,8 @@ def get_stock_data(stock_code, start_date_str, end_date_str):
         print(f"   时间范围: {start_date.strftime('%Y-%m-%d')} 至 {end_date.strftime('%Y-%m-%d')}")
         print(f"   请稍候...\n")
         
-        # 获取数据
-        stock_df = ak.stock_zh_a_hist(
-            symbol=stock_code,
-            period="daily",
-            start_date=start_date_str,
-            end_date=end_date_str,
-            adjust="qfq"  # 前复权
-        )
+        # 使用多数据源获取数据
+        stock_df = fetch_stock_data(stock_code, start_date_str, end_date_str)
         
         if stock_df.empty:
             print("❌ 未获取到数据,请检查股票代码是否正确!")
@@ -103,7 +161,8 @@ def get_stock_data(stock_code, start_date_str, end_date_str):
         print("   可能的原因:")
         print("   1. 股票代码不正确")
         print("   2. 网络连接问题")
-        print("   3. akshare库未正确安装\n")
+        print("   3. 数据源接口暂时不可用")
+        print("   4. akshare库版本过旧,请升级: pip install akshare --upgrade\n")
         return None
 
 def main():

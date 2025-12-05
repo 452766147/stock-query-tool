@@ -1,7 +1,9 @@
 """
-股票平均价格查询工具 - 图形界面版本 v2.1
+股票平均价格查询工具 - 图形界面版本 v2.3
 适用于Windows系统,双击即可运行
 性能优化: 延迟导入akshare库,启动速度更快
+v2.2: 添加代理设置选项,修复代理导致的连接问题
+v2.3: 添加多数据源支持(东方财富+腾讯),自动切换备用数据源
 """
 
 import tkinter as tk
@@ -16,8 +18,8 @@ import os
 class StockQueryApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("股票平均价格查询工具 v2.1")
-        self.root.geometry("700x650")
+        self.root.title("股票平均价格查询工具 v2.3")
+        self.root.geometry("700x700")
         self.root.resizable(False, False)
         
         # 延迟导入标志
@@ -140,6 +142,31 @@ class StockQueryApp:
             fg="gray"
         ).pack(side=tk.LEFT)
         
+        # 代理设置区域
+        proxy_frame = tk.Frame(input_frame)
+        proxy_frame.pack(fill=tk.X, pady=5)
+        tk.Label(
+            proxy_frame,
+            text="网络设置:",
+            font=("微软雅黑", 10),
+            width=10,
+            anchor='w'
+        ).pack(side=tk.LEFT)
+        self.no_proxy_var = tk.BooleanVar(value=True)  # 默认禁用代理
+        self.no_proxy_check = tk.Checkbutton(
+            proxy_frame,
+            text="禁用代理直连",
+            font=("微软雅黑", 10),
+            variable=self.no_proxy_var
+        )
+        self.no_proxy_check.pack(side=tk.LEFT, padx=10)
+        tk.Label(
+            proxy_frame,
+            text="(如遇连接问题,请勾选此项)",
+            font=("微软雅黑", 9),
+            fg="gray"
+        ).pack(side=tk.LEFT)
+        
         # 按钮区域
         button_frame = tk.Frame(self.root)
         button_frame.pack(pady=10)
@@ -226,9 +253,136 @@ class StockQueryApp:
         thread.daemon = True
         thread.start()
     
+    def fetch_stock_data(self, stock_code, start_date, end_date):
+        """
+        获取股票数据 - 多数据源策略
+        按顺序尝试多个数据源，直到成功获取数据
+        """
+        start_date_str = start_date.strftime("%Y%m%d")
+        end_date_str = end_date.strftime("%Y%m%d")
+        
+        # 确定股票市场前缀
+        if stock_code.startswith('6'):
+            market_prefix = "sh"
+            market_code = "1"  # 上海
+        else:
+            market_prefix = "sz"
+            market_code = "0"  # 深圳
+        
+        # 数据源1: 东方财富 (stock_zh_a_hist)
+        self.log_message("📡 尝试数据源1: 东方财富...")
+        try:
+            stock_df = ak.stock_zh_a_hist(
+                symbol=stock_code,
+                period="daily",
+                start_date=start_date_str,
+                end_date=end_date_str,
+                adjust="qfq"
+            )
+            if stock_df is not None and not stock_df.empty:
+                self.log_message("✅ 东方财富数据获取成功!")
+                return stock_df
+        except Exception as e:
+            self.log_message(f"⚠️ 东方财富接口异常: {str(e)[:80]}")
+        
+        # 数据源2: 腾讯 (stock_zh_a_daily)
+        self.log_message("📡 尝试数据源2: 腾讯...")
+        try:
+            symbol_tencent = f"{market_prefix}{stock_code}"
+            stock_df = ak.stock_zh_a_daily(symbol=symbol_tencent, adjust="qfq")
+            
+            if stock_df is not None and not stock_df.empty:
+                stock_df = stock_df.rename(columns={
+                    'date': '日期', 'open': '开盘', 'high': '最高',
+                    'low': '最低', 'close': '收盘', 'volume': '成交量', 'amount': '成交额'
+                })
+                stock_df['日期'] = pd.to_datetime(stock_df['日期'])
+                start_dt = pd.to_datetime(start_date)
+                end_dt = pd.to_datetime(end_date)
+                stock_df = stock_df[(stock_df['日期'] >= start_dt) & (stock_df['日期'] <= end_dt)]
+                stock_df['日期'] = stock_df['日期'].dt.strftime('%Y-%m-%d')
+                stock_df = stock_df.reset_index(drop=True)
+                self.log_message("✅ 腾讯数据获取成功!")
+                return stock_df
+        except Exception as e:
+            self.log_message(f"⚠️ 腾讯接口异常: {str(e)[:80]}")
+        
+        # 数据源3: 新浪 (stock_zh_a_hist_163)
+        self.log_message("📡 尝试数据源3: 网易财经...")
+        try:
+            stock_df = ak.stock_zh_a_hist_163(
+                symbol=stock_code,
+                start_date=start_date.strftime("%Y-%m-%d"),
+                end_date=end_date.strftime("%Y-%m-%d")
+            )
+            if stock_df is not None and not stock_df.empty:
+                stock_df = stock_df.rename(columns={
+                    '日期': '日期', '开盘价': '开盘', '最高价': '最高',
+                    '最低价': '最低', '收盘价': '收盘', '成交量': '成交量', '成交金额': '成交额'
+                })
+                if '日期' in stock_df.columns:
+                    stock_df['日期'] = pd.to_datetime(stock_df['日期']).dt.strftime('%Y-%m-%d')
+                stock_df = stock_df.reset_index(drop=True)
+                self.log_message("✅ 网易财经数据获取成功!")
+                return stock_df
+        except Exception as e:
+            self.log_message(f"⚠️ 网易财经接口异常: {str(e)[:80]}")
+        
+        # 数据源4: 百度股市通
+        self.log_message("📡 尝试数据源4: 百度股市通...")
+        try:
+            stock_df = ak.stock_zh_a_hist_min_em(
+                symbol=stock_code,
+                period="daily",
+                start_date=start_date.strftime("%Y-%m-%d %H:%M:%S"),
+                end_date=end_date.strftime("%Y-%m-%d %H:%M:%S"),
+                adjust="qfq"
+            )
+            if stock_df is not None and not stock_df.empty:
+                stock_df = stock_df.rename(columns={
+                    '时间': '日期', '开盘': '开盘', '最高': '最高',
+                    '最低': '最低', '收盘': '收盘', '成交量': '成交量', '成交额': '成交额'
+                })
+                stock_df['日期'] = pd.to_datetime(stock_df['日期']).dt.strftime('%Y-%m-%d')
+                stock_df = stock_df.drop_duplicates(subset=['日期'], keep='last')
+                stock_df = stock_df.reset_index(drop=True)
+                self.log_message("✅ 百度股市通数据获取成功!")
+                return stock_df
+        except Exception as e:
+            self.log_message(f"⚠️ 百度股市通接口异常: {str(e)[:80]}")
+        
+        # 数据源5: 同花顺
+        self.log_message("📡 尝试数据源5: 同花顺...")
+        try:
+            stock_df = ak.stock_zh_a_hist_pre_min_em(
+                symbol=stock_code,
+                start_date=start_date.strftime("%Y-%m-%d"),
+                end_date=end_date.strftime("%Y-%m-%d")
+            )
+            if stock_df is not None and not stock_df.empty:
+                self.log_message("✅ 同花顺数据获取成功!")
+                return stock_df
+        except Exception as e:
+            self.log_message(f"⚠️ 同花顺接口异常: {str(e)[:80]}")
+        
+        # 所有数据源都失败
+        self.log_message("❌ 所有数据源均不可用，请检查网络或稍后重试")
+        return pd.DataFrame()
+    
     def query_stock(self):
         """查询股票数据"""
         try:
+            # 处理代理设置
+            if self.no_proxy_var.get():
+                # 禁用代理，直连
+                os.environ['NO_PROXY'] = '*'
+                os.environ['no_proxy'] = '*'
+                # 清除可能存在的代理设置
+                for proxy_var in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
+                    if proxy_var in os.environ:
+                        del os.environ[proxy_var]
+                self.log_message("🌐 已禁用代理,使用直连模式\n")
+            
             # 首次查询时才导入akshare和pandas(延迟导入优化)
             if not self.akshare_loaded:
                 self.update_status("正在加载数据模块...")
@@ -274,14 +428,8 @@ class StockQueryApp:
             self.log_message("请稍候...")
             self.log_message("")
             
-            # 获取数据
-            stock_df = ak.stock_zh_a_hist(
-                symbol=stock_code,
-                period="daily",
-                start_date=start_date_str,
-                end_date=end_date_str,
-                adjust="qfq"
-            )
+            # 获取数据 - 使用多数据源策略
+            stock_df = self.fetch_stock_data(stock_code, start_date, end_date)
             
             if stock_df.empty:
                 self.log_message("❌ 未获取到数据,请检查股票代码是否正确!")
@@ -340,13 +488,22 @@ class StockQueryApp:
             )
             
         except Exception as e:
-            self.log_message(f"\n❌ 错误: {str(e)}")
-            self.log_message("可能的原因:")
-            self.log_message("1. 股票代码不正确")
-            self.log_message("2. 网络连接问题")
-            self.log_message("3. akshare库未正确安装")
+            error_msg = str(e)
+            self.log_message(f"\n❌ 错误: {error_msg}")
+            self.log_message("\n可能的原因及解决方案:")
+            self.log_message("1. 股票代码不正确 - 请检查股票代码")
+            self.log_message("2. 网络连接问题 - 请检查网络连接")
+            self.log_message("3. 代理设置问题 - 请尝试勾选'禁用代理直连'选项")
+            self.log_message("4. 数据源临时不可用 - 请稍后重试")
+            self.log_message("5. akshare库未正确安装 - 请重新安装")
+            
+            # 针对代理错误的特殊提示
+            if 'Proxy' in error_msg or 'proxy' in error_msg or 'RemoteDisconnected' in error_msg:
+                self.log_message("\n💡 检测到可能是代理问题!")
+                self.log_message("   建议: 勾选上方'禁用代理直连'选项后重试")
+            
             self.update_status("查询失败")
-            messagebox.showerror("查询失败", f"错误信息:\n{str(e)}")
+            messagebox.showerror("查询失败", f"错误信息:\n{error_msg}")
         
         finally:
             # 重新启用查询按钮

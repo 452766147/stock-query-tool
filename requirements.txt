@@ -1,7 +1,7 @@
 # requirements.txt
 # 股票查询工具所需的Python库
 
-akshare>=1.12.0
+akshare>=1.17.91
 pandas>=2.0.0
 tkcalendar>=1.6.1
 pyinstaller>=6.0.0
