@@ -258,6 +258,8 @@ class StockQueryApp:
         获取股票数据 - 多数据源策略
         按顺序尝试多个数据源，直到成功获取数据
         """
+        import requests
+        
         start_date_str = start_date.strftime("%Y%m%d")
         end_date_str = end_date.strftime("%Y%m%d")
         
@@ -283,48 +285,74 @@ class StockQueryApp:
         except Exception as e:
             self.log_message(f"⚠️ 东方财富接口异常: {str(e)[:80]}")
         
-        # 数据源2: 腾讯历史数据 (stock_zh_a_hist_tx)
-        self.log_message("📡 尝试数据源2: 腾讯...")
+        # 数据源2: 腾讯财经直连接口
+        self.log_message("📡 尝试数据源2: 腾讯财经...")
         try:
-            symbol_tx = f"{market_prefix}{stock_code}"
-            stock_df = ak.stock_zh_a_hist_tx(
-                symbol=symbol_tx,
-                start_date=start_date.strftime("%Y-%m-%d"),
-                end_date=end_date.strftime("%Y-%m-%d")
-            )
-            if stock_df is not None and not stock_df.empty:
-                stock_df = stock_df.rename(columns={
-                    'date': '日期', 'open': '开盘', 'high': '最高',
-                    'low': '最低', 'close': '收盘', 'amount': '成交量'
-                })
-                stock_df['日期'] = pd.to_datetime(stock_df['日期']).dt.strftime('%Y-%m-%d')
-                stock_df = stock_df.reset_index(drop=True)
-                self.log_message("✅ 腾讯数据获取成功!")
+            symbol = f"{market_prefix}{stock_code}"
+            start_str = start_date.strftime('%Y-%m-%d')
+            end_str = end_date.strftime('%Y-%m-%d')
+            url = f'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={symbol},day,{start_str},{end_str},500,qfq'
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            resp = requests.get(url, headers=headers, timeout=15)
+            data = resp.json()
+            
+            klines = data.get('data', {}).get(symbol, {}).get('qfqday', [])
+            if not klines:
+                klines = data.get('data', {}).get(symbol, {}).get('day', [])
+            
+            if klines:
+                rows = []
+                for k in klines:
+                    rows.append({
+                        '日期': k[0],
+                        '开盘': float(k[1]),
+                        '收盘': float(k[2]),
+                        '最高': float(k[3]),
+                        '最低': float(k[4]),
+                        '成交量': float(k[5]) if len(k) > 5 else 0
+                    })
+                stock_df = pd.DataFrame(rows)
+                self.log_message("✅ 腾讯财经数据获取成功!")
                 return stock_df
         except Exception as e:
-            self.log_message(f"⚠️ 腾讯接口异常: {str(e)[:80]}")
+            self.log_message(f"⚠️ 腾讯财经接口异常: {str(e)[:80]}")
         
-        # 数据源3: 腾讯每日数据 (stock_zh_a_daily) - 备用
-        self.log_message("📡 尝试数据源3: 腾讯(备用)...")
+        # 数据源3: 新浪财经直连接口
+        self.log_message("📡 尝试数据源3: 新浪财经...")
         try:
-            symbol_tencent = f"{market_prefix}{stock_code}"
-            stock_df = ak.stock_zh_a_daily(symbol=symbol_tencent, adjust="qfq")
+            symbol = f"{market_prefix}{stock_code}"
+            url = f'https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_{symbol}=/CN_MarketDataService.getKLineData?symbol={symbol}&scale=240&ma=no&datalen=300'
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            resp = requests.get(url, headers=headers, timeout=15)
+            text = resp.text
             
-            if stock_df is not None and not stock_df.empty:
-                stock_df = stock_df.rename(columns={
-                    'date': '日期', 'open': '开盘', 'high': '最高',
-                    'low': '最低', 'close': '收盘', 'volume': '成交量', 'amount': '成交额'
-                })
-                stock_df['日期'] = pd.to_datetime(stock_df['日期'])
+            # 解析JSONP响应
+            import json
+            json_str = text[text.find('(') + 1:text.rfind(')')]
+            klines = json.loads(json_str)
+            
+            if klines:
+                rows = []
                 start_dt = pd.to_datetime(start_date)
                 end_dt = pd.to_datetime(end_date)
-                stock_df = stock_df[(stock_df['日期'] >= start_dt) & (stock_df['日期'] <= end_dt)]
-                stock_df['日期'] = stock_df['日期'].dt.strftime('%Y-%m-%d')
-                stock_df = stock_df.reset_index(drop=True)
-                self.log_message("✅ 腾讯(备用)数据获取成功!")
-                return stock_df
+                for k in klines:
+                    day = k.get('day', '')
+                    dt = pd.to_datetime(day)
+                    if start_dt <= dt <= end_dt:
+                        rows.append({
+                            '日期': day,
+                            '开盘': float(k.get('open', 0)),
+                            '最高': float(k.get('high', 0)),
+                            '最低': float(k.get('low', 0)),
+                            '收盘': float(k.get('close', 0)),
+                            '成交量': float(k.get('volume', 0))
+                        })
+                if rows:
+                    stock_df = pd.DataFrame(rows)
+                    self.log_message("✅ 新浪财经数据获取成功!")
+                    return stock_df
         except Exception as e:
-            self.log_message(f"⚠️ 腾讯(备用)接口异常: {str(e)[:80]}")
+            self.log_message(f"⚠️ 新浪财经接口异常: {str(e)[:80]}")
         
         # 所有数据源都失败
         self.log_message("❌ 所有数据源均不可用，请检查网络或稍后重试")
