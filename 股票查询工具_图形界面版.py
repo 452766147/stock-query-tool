@@ -264,10 +264,8 @@ class StockQueryApp:
         # 确定股票市场前缀
         if stock_code.startswith('6'):
             market_prefix = "sh"
-            market_code = "1"  # 上海
         else:
             market_prefix = "sz"
-            market_code = "0"  # 深圳
         
         # 数据源1: 东方财富 (stock_zh_a_hist)
         self.log_message("📡 尝试数据源1: 东方财富...")
@@ -285,8 +283,29 @@ class StockQueryApp:
         except Exception as e:
             self.log_message(f"⚠️ 东方财富接口异常: {str(e)[:80]}")
         
-        # 数据源2: 腾讯 (stock_zh_a_daily)
+        # 数据源2: 腾讯历史数据 (stock_zh_a_hist_tx)
         self.log_message("📡 尝试数据源2: 腾讯...")
+        try:
+            symbol_tx = f"{market_prefix}{stock_code}"
+            stock_df = ak.stock_zh_a_hist_tx(
+                symbol=symbol_tx,
+                start_date=start_date.strftime("%Y-%m-%d"),
+                end_date=end_date.strftime("%Y-%m-%d")
+            )
+            if stock_df is not None and not stock_df.empty:
+                stock_df = stock_df.rename(columns={
+                    'date': '日期', 'open': '开盘', 'high': '最高',
+                    'low': '最低', 'close': '收盘', 'amount': '成交量'
+                })
+                stock_df['日期'] = pd.to_datetime(stock_df['日期']).dt.strftime('%Y-%m-%d')
+                stock_df = stock_df.reset_index(drop=True)
+                self.log_message("✅ 腾讯数据获取成功!")
+                return stock_df
+        except Exception as e:
+            self.log_message(f"⚠️ 腾讯接口异常: {str(e)[:80]}")
+        
+        # 数据源3: 腾讯每日数据 (stock_zh_a_daily) - 备用
+        self.log_message("📡 尝试数据源3: 腾讯(备用)...")
         try:
             symbol_tencent = f"{market_prefix}{stock_code}"
             stock_df = ak.stock_zh_a_daily(symbol=symbol_tencent, adjust="qfq")
@@ -302,68 +321,10 @@ class StockQueryApp:
                 stock_df = stock_df[(stock_df['日期'] >= start_dt) & (stock_df['日期'] <= end_dt)]
                 stock_df['日期'] = stock_df['日期'].dt.strftime('%Y-%m-%d')
                 stock_df = stock_df.reset_index(drop=True)
-                self.log_message("✅ 腾讯数据获取成功!")
+                self.log_message("✅ 腾讯(备用)数据获取成功!")
                 return stock_df
         except Exception as e:
-            self.log_message(f"⚠️ 腾讯接口异常: {str(e)[:80]}")
-        
-        # 数据源3: 新浪 (stock_zh_a_hist_163)
-        self.log_message("📡 尝试数据源3: 网易财经...")
-        try:
-            stock_df = ak.stock_zh_a_hist_163(
-                symbol=stock_code,
-                start_date=start_date.strftime("%Y-%m-%d"),
-                end_date=end_date.strftime("%Y-%m-%d")
-            )
-            if stock_df is not None and not stock_df.empty:
-                stock_df = stock_df.rename(columns={
-                    '日期': '日期', '开盘价': '开盘', '最高价': '最高',
-                    '最低价': '最低', '收盘价': '收盘', '成交量': '成交量', '成交金额': '成交额'
-                })
-                if '日期' in stock_df.columns:
-                    stock_df['日期'] = pd.to_datetime(stock_df['日期']).dt.strftime('%Y-%m-%d')
-                stock_df = stock_df.reset_index(drop=True)
-                self.log_message("✅ 网易财经数据获取成功!")
-                return stock_df
-        except Exception as e:
-            self.log_message(f"⚠️ 网易财经接口异常: {str(e)[:80]}")
-        
-        # 数据源4: 百度股市通
-        self.log_message("📡 尝试数据源4: 百度股市通...")
-        try:
-            stock_df = ak.stock_zh_a_hist_min_em(
-                symbol=stock_code,
-                period="daily",
-                start_date=start_date.strftime("%Y-%m-%d %H:%M:%S"),
-                end_date=end_date.strftime("%Y-%m-%d %H:%M:%S"),
-                adjust="qfq"
-            )
-            if stock_df is not None and not stock_df.empty:
-                stock_df = stock_df.rename(columns={
-                    '时间': '日期', '开盘': '开盘', '最高': '最高',
-                    '最低': '最低', '收盘': '收盘', '成交量': '成交量', '成交额': '成交额'
-                })
-                stock_df['日期'] = pd.to_datetime(stock_df['日期']).dt.strftime('%Y-%m-%d')
-                stock_df = stock_df.drop_duplicates(subset=['日期'], keep='last')
-                stock_df = stock_df.reset_index(drop=True)
-                self.log_message("✅ 百度股市通数据获取成功!")
-                return stock_df
-        except Exception as e:
-            self.log_message(f"⚠️ 百度股市通接口异常: {str(e)[:80]}")
-        
-        # 数据源5: 同花顺
-        self.log_message("📡 尝试数据源5: 同花顺...")
-        try:
-            stock_df = ak.stock_zh_a_hist_pre_min_em(
-                symbol=stock_code,
-                start_date=start_date.strftime("%Y-%m-%d"),
-                end_date=end_date.strftime("%Y-%m-%d")
-            )
-            if stock_df is not None and not stock_df.empty:
-                self.log_message("✅ 同花顺数据获取成功!")
-                return stock_df
-        except Exception as e:
-            self.log_message(f"⚠️ 同花顺接口异常: {str(e)[:80]}")
+            self.log_message(f"⚠️ 腾讯(备用)接口异常: {str(e)[:80]}")
         
         # 所有数据源都失败
         self.log_message("❌ 所有数据源均不可用，请检查网络或稍后重试")
